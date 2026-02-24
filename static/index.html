@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Chatbot</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f8fafc;
+            --chat-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-light: #64748b;
+            --user-msg: #4f46e5;
+            --bot-msg: #f1f5f9;
+            --border: #e2e8f0;
+            --sql-bg: #1e293b;
+            --sql-text: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--chat-bg);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        .chat-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: var(--text-main);
+        }
+
+        .chat-header p {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.875rem;
+            color: var(--text-light);
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 85%;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message.bot {
+            align-self: flex-start;
+        }
+
+        .message-bubble {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
+
+        .message.user .message-bubble {
+            background-color: var(--user-msg);
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+
+        .message.bot .message-bubble {
+            background-color: var(--bot-msg);
+            color: var(--text-main);
+            border-bottom-left-radius: 0;
+        }
+
+        .sql-box {
+            margin-top: 0.75rem;
+            background-color: var(--sql-bg);
+            color: var(--sql-text);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            position: relative;
+        }
+        
+        .sql-label {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #334155;
+            color: #94a3b8;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.7rem;
+            border-bottom-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+        }
+
+        .metadata {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .chat-input {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 1rem;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: var(--text-light);
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            align-self: flex-start;
+            color: var(--text-light);
+            font-size: 0.9rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div>
+            <h1>Inventory AI Assistant</h1>
+            <p>Ask questions about assets, vendors, and orders</p>
+        </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+        <!-- Initial bot greeting -->
+        <div class="message bot">
+            <div class="message-bubble">
+                Hello! I am your Inventory AI. I can answer questions about your inventory data and generate the SQL for you.<br><br>Try asking: <i>"How many assets do I have?"</i> or <i>"Show me the asset count by site"</i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading-indicator" style="padding: 0 1.5rem;">
+        Assistant is thinking...
+    </div>
+
+    <div class="chat-input">
+        <input type="text" id="user-input" placeholder="Ask a question about your inventory..." onkeypress="handleKeyPress(event)">
+        <button id="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    // Generate a simple session ID
+    const sessionId = Math.random().toString(36).substring(2, 15);
+
+    function addMessage(text, sender, meta = null) {
+        const messagesDiv = document.getElementById('chat-messages');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender}`;
+
+        let innerHTML = `<div class="message-bubble">${text.replace(/\n/g, '<br>')}</div>`;
+        
+        // Add SQL box and Metadata if this is a bot response with data
+        if (sender === 'bot' && meta) {
+            if (meta.sql) {
+                innerHTML += `
+                <div class="sql-box">
+                    <span class="sql-label">SQL Query</span>
+                    ${meta.sql}
+                </div>`;
+            }
+            if (meta.latency || meta.tokens) {
+                innerHTML += `
+                <div class="metadata">
+                    <span title="Model Provider">🤖 ${meta.model}</span>
+                    <span title="Response Time">⏱️ ${meta.latency}ms</span>
+                    <span title="Total Tokens">🪙 ${meta.tokens} tokens</span>
+                </div>`;
+            }
+        }
+
+        msgDiv.innerHTML = innerHTML;
+        messagesDiv.appendChild(msgDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    }
+
+    async function sendMessage() {
+        const inputField = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const loadingInd = document.getElementById('loading-indicator');
+        const message = inputField.value.trim();
+
+        if (!message) return;
+
+        // Display user message
+        addMessage(message, 'user');
+        
+        // Reset input and show loading state
+        inputField.value = '';
+        inputField.disabled = true;
+        sendBtn.disabled = true;
+        loadingInd.style.display = 'block';
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: message,
+                    context: {}
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.status === 'error') {
+                addMessage("Sorry, I encountered an error while processing your request.", 'bot');
+            } else {
+                addMessage(data.natural_language_answer, 'bot', {
+                    sql: data.sql_query,
+                    latency: data.latency_ms,
+                    tokens: data.token_usage?.total_tokens || 0,
+                    model: `${data.provider} (${data.model})`
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching chat response:', error);
+            addMessage(`Sorry, there was a problem connecting to the server: ${error.message}`, 'bot');
+        } finally {
+            inputField.disabled = false;
+            sendBtn.disabled = false;
+            loadingInd.style.display = 'none';
+            inputField.focus();
+        }
+    }
+</script>
+</body>
+</html>
